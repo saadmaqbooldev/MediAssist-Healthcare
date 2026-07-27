@@ -35,6 +35,7 @@ The project aims to provide:
 - pgAdmin
 
 ## 📂 Current Project Structure
+
 backend/
 │
 ├── app/
