@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -14,14 +14,18 @@ SECRET_KEY = "mysecretkey123"
 ALGORITHM = "HS256"
 
 
+# -------------------------
 # Password Hashing
+# -------------------------
 
 def hash_password(password: str):
     password_bytes = password.encode("utf-8")
+
     hashed = bcrypt.hashpw(
         password_bytes,
         bcrypt.gensalt()
     )
+
     return hashed.decode("utf-8")
 
 
@@ -35,13 +39,18 @@ def verify_password(password: str, hashed_password: str):
     )
 
 
+# -------------------------
 # JWT Token
+# -------------------------
 
 def create_token(data: dict):
     token_data = data.copy()
 
     expire = datetime.utcnow() + timedelta(hours=24)
-    token_data.update({"exp": expire})
+
+    token_data.update({
+        "exp": expire
+    })
 
     return jwt.encode(
         token_data,
@@ -50,25 +59,31 @@ def create_token(data: dict):
     )
 
 
-# Current Doctor Authentication
-
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/auth/login"
-)
-
+# -------------------------
+# Database Dependency
+# -------------------------
 
 def get_db():
     db = SessionLocal()
+
     try:
         yield db
     finally:
         db.close()
 
 
+# -------------------------
+# JWT Authentication
+# -------------------------
+
+bearer_scheme = HTTPBearer()
+
+
 def get_current_doctor(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db)
 ):
+    token = credentials.credentials
 
     try:
         payload = jwt.decode(
@@ -91,17 +106,16 @@ def get_current_doctor(
             detail="Invalid token"
         )
 
-
-    doctor = db.query(Doctor).filter(
-        Doctor.id == doctor_id
-    ).first()
-
+    doctor = (
+        db.query(Doctor)
+        .filter(Doctor.id == doctor_id)
+        .first()
+    )
 
     if doctor is None:
         raise HTTPException(
             status_code=404,
             detail="Doctor not found"
         )
-
 
     return doctor
